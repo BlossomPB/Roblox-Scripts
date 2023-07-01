@@ -1,305 +1,292 @@
--- Input this script into StarterPlayer >> StarterCharacterScripts
 local userInput = game:GetService("UserInputService")
-local players = game:GetService("Players")
-local tweenService = game:GetService("TweenService")
-local ContextActionService = game:GetService("ContextActionService")
 
---[[
-If using this script make sure to add all attributes with exact name shown here
-as well as your desired value for each
 
-For animations use your own this script doesn't provide default animations.
-Insert animation ID after 
-]]-- 
-local SPRINT_SPEED = script:GetAttribute("SprintSpeed") -- Spriting Speed
-local WALK_SPEED = script:GetAttribute("WalkSpeed")  -- Walking Speed
-local POWER_JUMP_POWER = script:GetAttribute("JumpAbilityPower") -- Power Jump Power
-local DEFUALT_JUMP_POWER = script:GetAttribute("DefualtJumpPower") -- Default Jump Power
-local SLIDING_SPEED_INCREMENT = script:GetAttribute("SlidingSpeedIncrement") --  Lower Decimal = slower increment time
-
-local playerModel = script.Parent
-local humanoid = playerModel:FindFirstChildWhichIsA("Humanoid")
-local Player = game.Players.LocalPlayer
-local Character = Player.Character
-
---Camera Vars
-local camera = workspace.CurrentCamera
-
--- Needed Varibles --
-local runSpeedRound = SPRINT_SPEED - WALK_SPEED
-local walkSpeedRound = WALK_SPEED - 2
-local startTransition = .1
-local stopTransition = .3
-local slidingGoal = 0
-local endSlide = nil
-local shifting = nil
-local cancelJump = nil
-local FIELD_OF_VIEW_WALKING = 70
-local FIELD_OF_VIEW_RUNNING = 74
-local CAMERA_OFFSET_WALKING = Vector3.new(0,0,-.8)
-local CAMERA_OFFSET_RUNNING = Vector3.new(0,0,-1)
-local CAMERA_OFFSET_SLIDING = Vector3.new(0,-1.8,.4)
+local localPlayer = game.Players.LocalPlayer
+local character = localPlayer.Character
+local humanoid = character:FindFirstChildWhichIsA("Humanoid")
 
 -- Animations --
---Falling is handled by "New Animations"
 local idleAnimtionInstance = Instance.new("Animation")
 idleAnimtionInstance.Name = "Idle Animation"
 idleAnimtionInstance.Parent = humanoid
-idleAnimtionInstance.AnimationId = "rbxassetid://" -- Idle Animation ID
-local playIdleAnimtionInstance = Character.Humanoid:LoadAnimation(idleAnimtionInstance)
+idleAnimtionInstance.AnimationId = "rbxassetid://13685702038" -- Idle Animation ID
+local playIdleAnimtionInstance = humanoid:LoadAnimation(idleAnimtionInstance)
 
 local walkingAnimtionInstance = Instance.new("Animation")
 walkingAnimtionInstance.Name = "Walking Animation"
 walkingAnimtionInstance.Parent = humanoid
-walkingAnimtionInstance.AnimationId = "rbxassetid:/" -- Walking Animation ID
-local playWalkingAnimtionInstance = Character.Humanoid:LoadAnimation(walkingAnimtionInstance)
+walkingAnimtionInstance.AnimationId = "rbxassetid://13827444506" -- Walking Animation ID
+local playWalkingAnimtionInstance = humanoid:LoadAnimation(walkingAnimtionInstance)
 
 local runningAnimtionInstance = Instance.new("Animation")
 runningAnimtionInstance.Name = "Running Animation"
 runningAnimtionInstance.Parent = humanoid
-runningAnimtionInstance.AnimationId = "rbxassetid://" -- Running Animation ID
-local playRunningAnimtionInstance = Character.Humanoid:LoadAnimation(runningAnimtionInstance)
+runningAnimtionInstance.AnimationId = "rbxassetid://13834996569" -- Running Animation ID
+local playRunningAnimtionInstance = humanoid:LoadAnimation(runningAnimtionInstance)
 
 local jumpAnimtionInstance = Instance.new("Animation")
 jumpAnimtionInstance.Name = "Jump Animation"
 jumpAnimtionInstance.Parent = humanoid
-jumpAnimtionInstance.AnimationId = "rbxassetid://" -- Default Jump Animation ID
-local playJumpAnimtionInstance = Character.Humanoid:LoadAnimation(jumpAnimtionInstance)
+jumpAnimtionInstance.AnimationId = "rbxassetid://13887795370" -- Default Jump Animation ID
+local playJumpAnimtionInstance = humanoid:LoadAnimation(jumpAnimtionInstance)
 
 local defaultFallAnimationInstance = Instance.new("Animation")
 defaultFallAnimationInstance.Name = "Fall Animation"
 defaultFallAnimationInstance.Parent = humanoid
-defaultFallAnimationInstance.AnimationId = "rbxassetid://" -- Default Fall Animation ID
-local playDefaultFallAnimationInstance = Character.Humanoid:LoadAnimation(defaultFallAnimationInstance)
+defaultFallAnimationInstance.AnimationId = "rbxassetid://13887805857" -- Default Fall Animation ID
+local playDefaultFallAnimationInstance = humanoid:LoadAnimation(defaultFallAnimationInstance)
 
 local powerJumpAnimtionInstance = Instance.new("Animation")
 powerJumpAnimtionInstance.Name = "Power Jump Animation"
 powerJumpAnimtionInstance.Parent = humanoid
-powerJumpAnimtionInstance.AnimationId = "rbxassetid://" --  Power Jump Animation ID
-local playPowerJumpAnimtionInstance = Character.Humanoid:LoadAnimation(powerJumpAnimtionInstance)
+powerJumpAnimtionInstance.AnimationId = "rbxassetid://12444431408" --  Power Jump Animation ID
+local playPowerJumpAnimtionInstance = humanoid:LoadAnimation(powerJumpAnimtionInstance)
 
 local powerFallAnimationInstance = Instance.new("Animation")
 powerFallAnimationInstance.Name = "Power Fall Animation"
 powerFallAnimationInstance.Parent = humanoid
-powerFallAnimationInstance.AnimationId = "rbxassetid://" -- Power Fall Animation ID
-local playPowerFallAnimationInstance = Character.Humanoid:LoadAnimation(powerFallAnimationInstance)
+powerFallAnimationInstance.AnimationId = "rbxassetid://12444437622" -- Power Fall Animation ID
+local playPowerFallAnimationInstance = humanoid:LoadAnimation(powerFallAnimationInstance)
 
 local slidingAnimtionInstance = Instance.new("Animation")
 slidingAnimtionInstance.Name = "Sliding Animation"
 slidingAnimtionInstance.Parent = humanoid
-slidingAnimtionInstance.AnimationId = "rbxassetid://" -- Sliding Animation ID
-local playSlidingAnimtionInstance = Character.Humanoid:LoadAnimation(slidingAnimtionInstance)
+slidingAnimtionInstance.AnimationId = "rbxassetid://12444476785" -- Sliding Animation ID
+local playSlidingAnimtionInstance = humanoid:LoadAnimation(slidingAnimtionInstance)
 
+-- Temp Stats For Landing --
+--Soft landing (.4,1,1.6)
+--Hard landing (.1,1,1.1)
+local landingAnimtionInstance = Instance.new("Animation")
+landingAnimtionInstance.Name = "Sliding Animation"
+landingAnimtionInstance.Parent = humanoid
+landingAnimtionInstance.AnimationId = "rbxassetid://13887820968" -- Landing Animation ID
+local playLandingAnimtionInstance = humanoid:LoadAnimation(landingAnimtionInstance)
 
--- Uses/Sets Jump Power
-humanoid.UseJumpPower = true
-humanoid.JumpPower = script:GetAttribute("DefualtJumpPower")
+-- Script Variables
 
-local currentAnim = ""
-local currentJumpAbility = ""
---[[
-Anims:
--Run -Walk -Idle -Slide -PowerJump -DefaultJump -SuperFall -DefaultFall
+	-- Jump Variables
+local currJumpAbl = "Default"
+		--Editable Variables
+local DEFUALT_JUMP_POWER = 50
+local POWER_JUMP_POWER = 80
 
-JumpAbilities:
--Default -Powered
-]]--
+	-- Movement Variables
+local currMovementAbl = "Idle"
+		--Editable Variables
+local WALK_SPEED = 13
+local RUN_SPEED = 25
 
--- Handles Basic Movements --
-	-- Fires Function When Avatar Moves 
-local function movementManager(speed)
-		if speed > runSpeedRound then
-			if currentAnim == "Run" or currentAnim == "Slide" then
-				return
-			else
-				playIdleAnimtionInstance:Stop(stopTransition)
-				playWalkingAnimtionInstance:Stop(stopTransition)
-				playPowerFallAnimationInstance:Stop(stopTransition)
-				playDefaultFallAnimationInstance:Stop(stopTransition)
+local currAnim = "nil"
+-------------------
 
-				playRunningAnimtionInstance:Play(startTransition)
-				currentAnim = "Run"
-				humanoid.CameraOffset = CAMERA_OFFSET_RUNNING
-				for i = FIELD_OF_VIEW_WALKING,FIELD_OF_VIEW_RUNNING,.2 do
-					camera.FieldOfView = i
-					task.wait(.01)
-				end
-			end		
-		elseif  runSpeedRound > speed and speed > walkSpeedRound then
-			if currentAnim == "Walk" or currentAnim == "Slide" then
-				return 
-			else
-				playIdleAnimtionInstance:Stop(stopTransition)
-				playRunningAnimtionInstance:Stop(stopTransition)
-				playPowerFallAnimationInstance:Stop(stopTransition)
-				playDefaultFallAnimationInstance:Stop(stopTransition)
+-- Script Logic --
 
-				playWalkingAnimtionInstance:Play(startTransition)
-				currentAnim = "Walk"
-				humanoid.CameraOffset = CAMERA_OFFSET_WALKING
-				camera.FieldOfView = FIELD_OF_VIEW_WALKING
-			end
-		elseif .01 > speed then
-			playRunningAnimtionInstance:Stop(stopTransition)
-			playWalkingAnimtionInstance:Stop(stopTransition)
-			playPowerFallAnimationInstance:Stop(stopTransition)
-			playDefaultFallAnimationInstance:Stop(stopTransition)
-
-			playIdleAnimtionInstance:Play(startTransition)
-			currentAnim = "Idle"
+local function Stop(animToStop)
+	if animToStop == "nil" then
+		
+	else
+		if animToStop == "Run" then
+			playRunningAnimtionInstance:Stop(.35)
+		elseif animToStop == "Walk" then
+			playWalkingAnimtionInstance:Stop(.2)
+		elseif animToStop == "Idle" then
+			playIdleAnimtionInstance:Stop(.2)
+		elseif animToStop == "DefaultJump" then
+			playJumpAnimtionInstance:Stop(.2)
+		elseif animToStop == "PowerJump" then
+			playPowerJumpAnimtionInstance:Stop(.2)
+		elseif animToStop == "DefaultFall" then
+			playDefaultFallAnimationInstance:Stop(.2)
+		elseif animToStop == "PowerFall" then
+			playPowerFallAnimationInstance:Stop(.2)
+		elseif animToStop == "Slide" then
+			playSlidingAnimtionInstance:Stop(.2)
+		elseif animToStop == "Land" then
+			playSlidingAnimtionInstance:Stop(.2)
+		elseif animToStop == "Swim" then
+			
+		elseif animToStop == "Crouch" then
+			
+		else
+			warn("SAE:1")
 		end
+	end
 end
 
-userInput.InputBegan:Connect(function(input,busy)
-	if input.KeyCode == Enum.KeyCode.LeftShift and not busy then
-		humanoid.WalkSpeed = SPRINT_SPEED
-		shifting = true
-	end
-end)
-
-userInput.InputEnded:Connect(function(input,busy)
-	if input.KeyCode == Enum.KeyCode.LeftShift and not busy then
-		humanoid.WalkSpeed = WALK_SPEED
-		shifting = false
-	end
-end)
-
-humanoid.Running:Connect(movementManager)
--- End --
-
-
-
--- Sliding --
-	-- When not holding "E" it forces sliding to be cancled 
-userInput.InputEnded:Connect(function(input,busy)
-	if input.KeyCode == Enum.KeyCode.E and not busy	then
-		endSlide = true
-	end
-end)
-
-	-- Plays Sliding when E is pressed and held
-userInput.InputBegan:Connect(function(input,busy)
-	if input.KeyCode == Enum.KeyCode.E and not busy then
-		if currentAnim == "Run" then
-			currentAnim = "Slide"
-			playRunningAnimtionInstance:Stop(stopTransition)
-			playSlidingAnimtionInstance:Play(startTransition)
-			humanoid.CameraOffset = CAMERA_OFFSET_SLIDING
-			endSlide = false
-			
-				-- For loop that changes WalkSpeed when activated
-			for i = SPRINT_SPEED,slidingGoal,-SLIDING_SPEED_INCREMENT do
-				humanoid.WalkSpeed = i
-				humanoid.CameraOffset = CAMERA_OFFSET_SLIDING
-					-- Nested If Statments that handle when sliding is trying to be cancled
-				if endSlide == true then
-					endSlide = false
-					if humanoid.Jumping == true then
-						break
-						else
-						if shifting == false then
-							playSlidingAnimtionInstance:Stop(stopTransition)
-							playRunningAnimtionInstance:Stop(stopTransition)
-							playWalkingAnimtionInstance:Play(startTransition)
-							currentAnim = "Walk"
-							humanoid.WalkSpeed = WALK_SPEED
-							camera.FieldOfView = FIELD_OF_VIEW_WALKING
-							humanoid.CameraOffset = CAMERA_OFFSET_WALKING
-						elseif shifting == true then
-							playSlidingAnimtionInstance:Stop(stopTransition)
-							playWalkingAnimtionInstance:Stop(stopTransition)
-							playRunningAnimtionInstance:Play(startTransition)
-							currentAnim = "Run"
-							humanoid.WalkSpeed = SPRINT_SPEED
-							camera.FieldOfView = FIELD_OF_VIEW_RUNNING
-							humanoid.CameraOffset = CAMERA_OFFSET_RUNNING
-						end
-					end
-					break
-				end
-				
-				task.wait(.1)
-			end
+local function jumpManager(currState,timeInAir)
+	if currState == Enum.HumanoidStateType.Jumping then
+		script:SetAttribute("Jumping", true)
+		if currJumpAbl == "Default" then
+			Stop(currAnim)
+			playJumpAnimtionInstance:Play(.1,1,2)
+			currAnim = "DefaultJump"
+		elseif currJumpAbl == "Powered" then
+			Stop(currAnim)
+			playPowerJumpAnimtionInstance:Play(.1,1,2)
+			currAnim = "PowerJump"
+		end
+	elseif currState == Enum.HumanoidStateType.Freefall then
+		if currJumpAbl == "Default" then
+			Stop(currAnim)
+			playDefaultFallAnimationInstance:Play()
+			currAnim = "DefaultFall"
+		elseif currJumpAbl == "Powered" then
+			Stop(currAnim)
+			playPowerFallAnimationInstance:Play()
+			currAnim = "PowerFall"
+		end	
+	elseif currState == Enum.HumanoidStateType.Landed then
+		script:SetAttribute("Jumping", false)
+		if timeInAir < .69 then
+			Stop(currAnim)
+			playLandingAnimtionInstance:Play(.1,.1,2)
+			currAnim = "Land"
+		elseif 1.5 >= timeInAir and timeInAir >= .69 then
+			Stop(currAnim)
+			playLandingAnimtionInstance:Play(.1,1,1.2)
+			currAnim = "Land"
+		elseif	timeInAir > 1.5 then
+			Stop(currAnim)
+			playLandingAnimtionInstance:Play(.1,1,.6)
+			currAnim = "Land"
 		end
 	end
-end)
--- End --
+end
 
+-- Tick Handler Variable --
+local timeFromJump = tick()
+local function jumpTimeHandler(isLanding,currState)
+	if isLanding == nil then
+		timeFromJump = tick()
+	elseif isLanding == true then
+		local timeInAir = tick() - timeFromJump
+		jumpManager(currState,timeInAir)
+	end
+end
 
--- Power Jump Ability Script --
+-- Toggles jump ability
 userInput.InputBegan:Connect(function(input,busy) 
 	if input.KeyCode == Enum.KeyCode.Q and not busy then
-		if humanoid.JumpPower == DEFUALT_JUMP_POWER then
+		
+		if currJumpAbl == "Default" then
 			humanoid.JumpPower = POWER_JUMP_POWER
-			currentJumpAbility = "Powered"
-		elseif humanoid.JumpPower == POWER_JUMP_POWER then
+			currJumpAbl = "Powered"
+			
+		elseif currJumpAbl == "Powered" then
 			humanoid.JumpPower = DEFUALT_JUMP_POWER
-			currentJumpAbility = "Default"
+			currJumpAbl = "Default"
 		end
 	end
 end)
--- End --
 
 
--- Handles Jumping Animations --
-userInput.JumpRequest:Connect(function(input)
-		endSlide = true
-		if humanoid.JumpPower == DEFUALT_JUMP_POWER then
-			currentAnim = "DefaultJump"
-			playDefaultFallAnimationInstance:Stop(stopTransition)
-			playWalkingAnimtionInstance:Stop(stopTransition)
-			playRunningAnimtionInstance:Stop(stopTransition)
-			playSlidingAnimtionInstance:Stop(stopTransition)
-			playIdleAnimtionInstance:Stop(stopTransition)
-			
-			playJumpAnimtionInstance:Play(startTransition)
+
+
+-- Jumping Manager
+humanoid.StateChanged:Connect(function(prevState,currState)
+	if currState == Enum.HumanoidStateType.Jumping then
+		jumpManager(currState)
+		jumpTimeHandler()
+	elseif currState == Enum.HumanoidStateType.Freefall then
+		jumpManager(currState)
+	elseif currState == Enum.HumanoidStateType.Landed then
+		jumpTimeHandler(true,currState)
+	end
+end)
+
+
+local function movementManager(speed)
+	print("Fired movement function")
+	local currentSpeed = script:GetAttribute("Speed")
+	print(currentSpeed)
+	if humanoid:GetState() == Enum.HumanoidStateType.Running then
+		if script:GetAttribute("Jumping") == true or script:GetAttribute("Sliding") == true then
+
+		elseif script:GetAttribute("Jumping") == false or script:GetAttribute("Sliding") == false then
+			if script:GetAttribute("Sprinting") == true then
+				if (currentSpeed == 0) then
+					if not (currAnim == "Idle") then
+						Stop(currAnim)
+						playIdleAnimtionInstance:Play(.1,1,1)
+						currAnim = "Idle"
+					else
+						warn("MFE:4")
+					end
+				elseif (currentSpeed <= RUN_SPEED + 2) and (currentSpeed >= RUN_SPEED - 2) then
+					if not (currAnim == "Run") then
+						Stop(currAnim)
+						playRunningAnimtionInstance:Play(.1,1,1)
+						currAnim = "Run"
+					end
+				else
+					
+				end
+			elseif script:GetAttribute("Sprinting") == false then
+				if (currentSpeed == 0) then
+					if not (currAnim == "Idle") then
+						Stop(currAnim)
+						playIdleAnimtionInstance:Play(.1,1,1)
+						currAnim = "Idle"
+					else
+						warn("MFE:5")
+					end
+				elseif (currentSpeed <= WALK_SPEED + 2) and (currentSpeed >= WALK_SPEED - 2) then
+					if not (currAnim == "Walk") then
+						Stop(currAnim)
+						playWalkingAnimtionInstance:Play(.1,1,1)
+						currAnim = "Walk"
+					end
+				else
+					
+				end
+			else 
+				warn("MFE:3")
+			end
+		else
+			warn("MFE:2")
+		end
+	elseif humanoid:GetState() == Enum.HumanoidStateType.Climbing then
 		
-			-- Plays Default Fall Animation (After jump)
-			playJumpAnimtionInstance:Stop(stopTransition)
+	elseif humanoid:GetState() == Enum.HumanoidStateType.Swimming then
+
+	elseif humanoid:GetState() == Enum.HumanoidStateType.Ragdoll then
+
+	else 
+		if humanoid:GetState() == Enum.HumanoidStateType.Jumping then
+
+		elseif humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+
+		elseif humanoid:GetState() == Enum.HumanoidStateType.Landed then
 			
-			playDefaultFallAnimationInstance:Play(startTransition)
-			currentAnim = "DefaultFall"
-			
-		else -- Runs if Powerjump is enabled
-			currentAnim = "PowerJump"
-			playWalkingAnimtionInstance:Stop(stopTransition)
-			playRunningAnimtionInstance:Stop(stopTransition)
-			playSlidingAnimtionInstance:Stop(stopTransition)
-			playIdleAnimtionInstance:Stop(stopTransition)
-			
-			playPowerJumpAnimtionInstance:Play(startTransition)
-			
-			-- Plays Power Fall Animation (After jump)
-			playPowerJumpAnimtionInstance:Stop(stopTransition)
-			
-			playPowerFallAnimationInstance:Play(startTransition)
-			currentAnim = "PowerFall"
+		else 
+			warn("MFE:1")
 		end
-end)
-
-
-	-- Plays when player touches ground again
-humanoid:GetPropertyChangedSignal("FloorMaterial"):Connect(function()
-	if humanoid.FloorMaterial == Enum.Material.Air then
-		
-	else
-		playPowerFallAnimationInstance:Stop(stopTransition)
-		playDefaultFallAnimationInstance:Stop(stopTransition)
 	end
-end)
-
-while true do
-	if humanoid.FloorMaterial == Enum.Material.Air then
-		wait(.3)
-		if humanoid.FloorMaterial == Enum.Material.Air then
-			playDefaultFallAnimationInstance:Play(startTransition)
-		end
-	else
-		playPowerFallAnimationInstance:Stop(stopTransition)
-		playDefaultFallAnimationInstance:Stop(stopTransition)
-	end
-	wait(.4)
 end
--- End PC/Consule--
 
--- Mobile Controls --
+
+
+-- Toggles sprint
+userInput.InputBegan:Connect(function(input,busy)
+	if input.KeyCode == Enum.KeyCode.LeftShift and not busy then
+		script:SetAttribute("Sprinting", true)
+		humanoid.WalkSpeed = RUN_SPEED
+		script:SetAttribute("Speed",RUN_SPEED)
+	end
+end)
+
+userInput.InputEnded:Connect(function(input,busy)
+	if input.KeyCode == Enum.KeyCode.LeftShift and not busy then
+		script:SetAttribute("Sprinting", false)
+		humanoid.WalkSpeed = WALK_SPEED
+		script:SetAttribute("Speed",WALK_SPEED)
+	end
+end)
+
+
+humanoid.Running:Connect(function(speed)
+	print("Changed Speed")
+	script:SetAttribute("Speed",speed)
+	movementManager()
+end)
