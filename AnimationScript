@@ -1,9 +1,11 @@
-local userInput = game:GetService("UserInputService")
-
+local UserInput = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 
 local localPlayer = game.Players.LocalPlayer
 local character = localPlayer.Character
 local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+local HRP = character:FindFirstChild("HumanoidRootPart")
 
 -- Animations --
 local idleAnimtionInstance = Instance.new("Animation")
@@ -54,14 +56,15 @@ slidingAnimtionInstance.Parent = humanoid
 slidingAnimtionInstance.AnimationId = "rbxassetid://12444476785" -- Sliding Animation ID
 local playSlidingAnimtionInstance = humanoid:LoadAnimation(slidingAnimtionInstance)
 
--- Temp Stats For Landing --
---Soft landing (.4,1,1.6)
---Hard landing (.1,1,1.1)
 local landingAnimtionInstance = Instance.new("Animation")
 landingAnimtionInstance.Name = "Sliding Animation"
 landingAnimtionInstance.Parent = humanoid
 landingAnimtionInstance.AnimationId = "rbxassetid://13887820968" -- Landing Animation ID
 local playLandingAnimtionInstance = humanoid:LoadAnimation(landingAnimtionInstance)
+
+
+
+
 
 -- Script Variables
 
@@ -75,13 +78,15 @@ local POWER_JUMP_POWER = 80
 local currMovementAbl = "Idle"
 		--Editable Variables
 local WALK_SPEED = 13
-local RUN_SPEED = 25
+local RUN_SPEED = 32
+local SLIDE_SPEED = 80
 
 local currAnim = "nil"
 -------------------
 
 -- Script Logic --
 
+-- Stop Animation Executer
 local function Stop(animToStop)
 	if animToStop == "nil" then
 		
@@ -103,7 +108,7 @@ local function Stop(animToStop)
 		elseif animToStop == "Slide" then
 			playSlidingAnimtionInstance:Stop(.2)
 		elseif animToStop == "Land" then
-			playSlidingAnimtionInstance:Stop(.2)
+			playLandingAnimtionInstance:Stop(.2)
 		elseif animToStop == "Swim" then
 			
 		elseif animToStop == "Crouch" then
@@ -142,6 +147,7 @@ local function jumpManager(currState,timeInAir)
 			Stop(currAnim)
 			playLandingAnimtionInstance:Play(.1,.1,2)
 			currAnim = "Land"
+			
 		elseif 1.5 >= timeInAir and timeInAir >= .69 then
 			Stop(currAnim)
 			playLandingAnimtionInstance:Play(.1,1,1.2)
@@ -157,16 +163,18 @@ end
 -- Tick Handler Variable --
 local timeFromJump = tick()
 local function jumpTimeHandler(isLanding,currState)
-	if isLanding == nil then
-		timeFromJump = tick()
-	elseif isLanding == true then
-		local timeInAir = tick() - timeFromJump
-		jumpManager(currState,timeInAir)
+	if not (currAnim == "Sliding") then
+		if isLanding == nil then
+			timeFromJump = tick()
+		elseif isLanding == true then
+			local timeInAir = tick() - timeFromJump
+			jumpManager(currState,timeInAir)
+		end
 	end
 end
 
 -- Toggles jump ability
-userInput.InputBegan:Connect(function(input,busy) 
+UserInput.InputBegan:Connect(function(input,busy) 
 	if input.KeyCode == Enum.KeyCode.Q and not busy then
 		
 		if currJumpAbl == "Default" then
@@ -179,8 +187,6 @@ userInput.InputBegan:Connect(function(input,busy)
 		end
 	end
 end)
-
-
 
 
 -- Jumping Manager
@@ -196,14 +202,16 @@ humanoid.StateChanged:Connect(function(prevState,currState)
 end)
 
 
+
+
 local function movementManager(speed)
-	print("Fired movement function")
 	local currentSpeed = script:GetAttribute("Speed")
 	print(currentSpeed)
 	if humanoid:GetState() == Enum.HumanoidStateType.Running then
 		if script:GetAttribute("Jumping") == true or script:GetAttribute("Sliding") == true then
 
 		elseif script:GetAttribute("Jumping") == false or script:GetAttribute("Sliding") == false then
+			warn("Starting Movement Animations")
 			if script:GetAttribute("Sprinting") == true then
 				if (currentSpeed == 0) then
 					if not (currAnim == "Idle") then
@@ -258,8 +266,9 @@ local function movementManager(speed)
 		elseif humanoid:GetState() == Enum.HumanoidStateType.Freefall then
 
 		elseif humanoid:GetState() == Enum.HumanoidStateType.Landed then
-			
+
 		else 
+			print(humanoid:GetState())
 			warn("MFE:1")
 		end
 	end
@@ -268,7 +277,7 @@ end
 
 
 -- Toggles sprint
-userInput.InputBegan:Connect(function(input,busy)
+UserInput.InputBegan:Connect(function(input,busy)
 	if input.KeyCode == Enum.KeyCode.LeftShift and not busy then
 		script:SetAttribute("Sprinting", true)
 		humanoid.WalkSpeed = RUN_SPEED
@@ -276,7 +285,7 @@ userInput.InputBegan:Connect(function(input,busy)
 	end
 end)
 
-userInput.InputEnded:Connect(function(input,busy)
+UserInput.InputEnded:Connect(function(input,busy)
 	if input.KeyCode == Enum.KeyCode.LeftShift and not busy then
 		script:SetAttribute("Sprinting", false)
 		humanoid.WalkSpeed = WALK_SPEED
@@ -284,9 +293,189 @@ userInput.InputEnded:Connect(function(input,busy)
 	end
 end)
 
-
 humanoid.Running:Connect(function(speed)
-	print("Changed Speed")
 	script:SetAttribute("Speed",speed)
 	movementManager()
 end)
+
+-- Sliding Tweens
+local goal = {}
+goal.WalkSpeed = 0
+
+local tweenInfoSlide = TweenInfo.new(
+	5,
+	Enum.EasingStyle.Exponential,
+	Enum.EasingDirection.Out
+)
+
+local slideTween = TweenService:Create(humanoid,tweenInfoSlide,goal)
+
+local function slideEnd()
+	slideTween:Cancel()
+	Stop(currAnim)
+	playSlidingAnimtionInstance:Stop(.2)
+	script:SetAttribute("Sliding",false)
+	if script:GetAttribute("Sprinting") == false then
+		humanoid.WalkSpeed = WALK_SPEED
+		movementManager()
+	elseif script:GetAttribute("Sprinting") == true then
+		humanoid.WalkSpeed = RUN_SPEED
+		movementManager()
+	else
+		warn("SEF:1")
+	end
+end
+
+UserInput.InputEnded:Connect(function(input, busy)
+	if ((input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.LeftShift) and script:GetAttribute("Sliding") == true) and not busy then
+		slideEnd()
+		slideTween:Cancel()
+	end
+end)
+
+slideTween.Completed:Connect(slideEnd)
+
+local SLIDING_POWER_DEBRIS = .6
+local SLIDING_POWER_DELAY = .2
+-- Left Control Manager
+UserInput.InputBegan:Connect(function(input, busy)
+	if input.KeyCode == Enum.KeyCode.E and not busy then
+		if script:GetAttribute("Sprinting") == true and script:GetAttribute("Jumping") == false then
+			script:SetAttribute("Sliding", true)
+			Stop(currAnim)
+			humanoid.WalkSpeed = SLIDE_SPEED
+			playSlidingAnimtionInstance:Play()
+			currAnim = "Slide"
+			slideTween:Play()
+			
+		elseif script:GetAttribute("Sprinting") == true and script:GetAttribute("Jumping") == true then
+			Stop(currAnim)
+			playSlidingAnimtionInstance:Play(.08, .8, 1.2)
+			script:SetAttribute("Sliding", true)
+			currAnim = "Slide"
+			local attachment = Instance.new("Attachment", HRP)
+			local vecForce = Instance.new("VectorForce", HRP)
+			vecForce.Attachment0 = attachment
+			vecForce.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+			vecForce.Force = Vector3.new(0,-1,-2) * 2500
+			Debris:AddItem(attachment, SLIDING_POWER_DEBRIS)
+			Debris:AddItem(vecForce, SLIDING_POWER_DEBRIS)
+			slideEnd()
+			
+		elseif script:GetAttribute("Sprinting") == false and script:GetAttribute("Jumping") == true then
+			Stop(currAnim)
+			playPowerFallAnimationInstance:Play(.08, .8, 1.2)
+			script:SetAttribute("Sliding", true)
+			currAnim = "Slide"
+			local attachment = Instance.new("Attachment", HRP)
+			local vecForce = Instance.new("VectorForce", HRP)
+			vecForce.Attachment0 = attachment
+			vecForce.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+			vecForce.Force = Vector3.new(0,-1,-2) * 2500
+			Debris:AddItem(attachment, SLIDING_POWER_DEBRIS)
+			Debris:AddItem(vecForce, SLIDING_POWER_DEBRIS)
+			slideEnd()
+		else
+			warn("LCM:1")
+		end
+	end
+end)
+
+local ForceTimer = .08
+local VectorForcePower = 4.5
+local StrafeCooldown = 1.2
+local lastStrafeUse = 0
+local function strafeForce(direction)
+	if script:GetAttribute("Jumping") == true and tick() - lastStrafeUse >= StrafeCooldown then
+		if direction == "Left" then
+			local attachment = Instance.new("Attachment", HRP)
+			local vecForce = Instance.new("VectorForce", HRP)
+			vecForce.Attachment0 = attachment
+			vecForce.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+			vecForce.Force = Vector3.new(-VectorForcePower,0,0) * 2500
+			Debris:AddItem(attachment, ForceTimer)
+			Debris:AddItem(vecForce, ForceTimer)
+			
+		elseif direction == "Right" then
+			local attachment = Instance.new("Attachment", HRP)
+			local vecForce = Instance.new("VectorForce", HRP)
+			vecForce.Attachment0 = attachment
+			vecForce.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+			vecForce.Force = Vector3.new(VectorForcePower,0,0) * 2500
+			Debris:AddItem(attachment, ForceTimer)
+			Debris:AddItem(vecForce, ForceTimer)
+			
+		elseif direction == "Down" then
+			local attachment = Instance.new("Attachment", HRP)
+			local vecForce = Instance.new("VectorForce", HRP)
+			vecForce.Attachment0 = attachment
+			vecForce.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+			vecForce.Force = Vector3.new(0,-VectorForcePower,0) * 2500
+			Debris:AddItem(attachment, ForceTimer)
+			Debris:AddItem(vecForce, ForceTimer)
+			
+		elseif direction == "Forward" then
+			local attachment = Instance.new("Attachment", HRP)
+			local vecForce = Instance.new("VectorForce", HRP)
+			vecForce.Attachment0 = attachment
+			vecForce.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+			vecForce.Force = Vector3.new(0,0,-VectorForcePower) * 2500
+			Debris:AddItem(attachment, ForceTimer)
+			Debris:AddItem(vecForce, ForceTimer)
+		end
+		lastStrafeUse = tick()
+	end
+end
+
+--Detect when "A" Is Double Pressed
+local lastKeyPressA = 0
+UserInput.InputBegan:Connect(function(input, busy)
+	if input.KeyCode == Enum.KeyCode.A and not busy then
+		if tick() - lastKeyPressA <= .5 then
+			strafeForce("Left")
+			lastKeyPressA = 0
+		else 
+			lastKeyPressA = tick()
+		end
+	end	
+end)
+
+--Detect when "D" Is Double Pressed
+local lastKeyPressD = 0
+UserInput.InputBegan:Connect(function(input, busy)
+	if input.KeyCode == Enum.KeyCode.D and not busy then
+		if tick() - lastKeyPressD <= .5 then
+			strafeForce("Right")
+			lastKeyPressD = 0
+		else 
+			lastKeyPressD = tick()
+		end
+	end	
+end)
+
+--Detect when "S" Is Double Pressed
+local lastKeyPressS = 0
+UserInput.InputBegan:Connect(function(input, busy)
+	if input.KeyCode == Enum.KeyCode.S and not busy then
+		if tick() - lastKeyPressS <= .5 then
+			strafeForce("Down")
+			lastKeyPressS = 0
+		else 
+			lastKeyPressS = tick()
+		end
+	end	
+end)
+
+--Detect when "W" Is Double Pressed
+local lastKeyPressW = 0
+UserInput.InputBegan:Connect(function(input, busy)
+	if input.KeyCode == Enum.KeyCode.W and not busy then
+		if tick() - lastKeyPressW <= .5 then
+			strafeForce("Forward")
+			lastKeyPressW = 0
+		else 
+			lastKeyPressW = tick()
+		end
+	end	
+end)
+slideTween.Completed:Connect(slideEnd)
